@@ -1,52 +1,59 @@
-import { Avatar, Button, Menu, Portal, Text } from "@chakra-ui/react";
-import { useContext, useEffect } from "react";
-import { AuthContext } from "../contexts/AuthContext";
-import { logout } from "../services/auth";
+import { createContext, useEffect, useState } from "react";
+import { getAuth, onAuthStateChanged } from "firebase/auth";
+import { app } from "../config/firebase";
+import { Box, Spinner, VStack } from "@chakra-ui/react"; // ✅ 추가
 
-export default function MenuWithAvatar() {
+export const AuthContext = createContext();
 
-  const { user } = useContext(AuthContext)
-  const handleLogout = async () => {
-    await logout();
-    console.log("로그아웃")
+function serializeUser(firebaseUser) {
+  if (!firebaseUser) return null;
+  return {
+    uid: firebaseUser.uid,
+    email: firebaseUser.email,
+    displayName: firebaseUser.displayName,
+    photoURL: firebaseUser.photoURL,
+    emailVerified: firebaseUser.emailVerified,
+    metadata: firebaseUser.metadata,
+    providerData: firebaseUser.providerData,
+  };
+}
+
+// eslint-disable-next-line react-refresh/only-export-components
+export default function AuthProvider({ children }) {
+  const [user, setUser] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const auth = getAuth(app);
+    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+      const serializedUser = serializeUser(currentUser);
+      setUser(serializedUser);
+      setLoading(false);
+    });
+
+    return () => unsubscribe();
+  }, []);
+
+  // ✅ 더 예쁜 로딩 UI
+  if (loading) {
+    return (
+      <VStack
+        minH="100vh"
+        justify="center"
+        align="center"
+        bg={{ base: "white", _dark: "gray.900" }}
+      >
+        <Spinner size="xl" color="blue.500" thickness="4px" />
+        <Box mt={4} fontSize="lg" color="gray.500">
+          로딩 중...
+        </Box>
+      </VStack>
+    );
   }
 
   return (
-    <Menu.Root>
-      <Menu.Trigger>
-          <Avatar.Root size="sm">
-            <Avatar.Fallback name={user.displayName || user.email} />
-            <Avatar.Image src={user.photoURL} />
-          </Avatar.Root>
-      </Menu.Trigger>
-      {/** 최상단 위치하게 하기 위해 Portal 사용 */}
-      <Portal>
-        <Menu.Positioner>
-          <Menu.Content borderRadius="lg">
-            <Menu.Item 
-              value="profile" 
-              cursor="default"
-              pointerEvents="none"
-              bg="transparent"
-              _hover={{ bg: "transparent" }}
-            >
-              <Text fontWeight="medium">안녕하세요, {user.displayName || user.email}님.</Text>
-            </Menu.Item>
-            <Menu.Separator/>
-            <Menu.Item value="logout" asChild>
-              <Button 
-                width="100%" 
-                borderRadius="full"
-                variant="outline"
-                onClick={handleLogout}
-                _hover ={{
-                  cursor:"pointer"
-                }}
-              >로그아웃</Button>
-            </Menu.Item>
-          </Menu.Content>
-        </Menu.Positioner>
-      </Portal>
-    </Menu.Root>
-  )
+    <AuthContext.Provider value={{ user, setUser }}>
+      {children}
+    </AuthContext.Provider>
+  );
 }
